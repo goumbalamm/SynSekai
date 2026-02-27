@@ -44,3 +44,17 @@ jobs:
 
       - name: Test
         run: cargo test
+
+      - name: Install cargo-tarpaulin
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-tarpaulin
+
+      - name: Coverage
+        run: cargo tarpaulin --out xml --config tarpaulin.toml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: cobertura.xml
+          fail_ci_if_error: false

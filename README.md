@@ -4,6 +4,8 @@ A fast, keyboard-driven terminal torrent client built with Rust.
 
 ![Rust](https://img.shields.io/badge/rust-2024-orange)
 ![License](https://img.shields.io/badge/license-MIT-blue)
+[![CI](https://github.com/goumbalamm/SynSekai/actions/workflows/ci.yml/badge.svg)](https://github.com/goumbalamm/SynSekai/actions/workflows/ci.yml)
+[![Coverage](https://codecov.io/gh/goumbalamm/SynSekai/branch/main/graph/badge.svg)](https://codecov.io/gh/goumbalamm/SynSekai)
 
 ## Features
 
