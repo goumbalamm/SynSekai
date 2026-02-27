@@ -151,11 +151,30 @@ impl TorrentEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write;
     use tempfile::TempDir;
 
-    fn fixture_path() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("tests/fixtures/harry-potter.torrent")
+    /// Build a minimal valid single-file torrent as raw bencode bytes.
+    ///
+    /// Structure (keys sorted per bencode spec):
+    ///   { "info": { "length": 1, "name": "t", "piece length": 16384, "pieces": <20 zero bytes> } }
+    fn minimal_torrent_bytes() -> Vec<u8> {
+        let mut v = Vec::new();
+        v.extend_from_slice(b"d4:infod6:lengthi1e4:name1:t12:piece lengthi16384e6:pieces20:");
+        v.extend_from_slice(&[0u8; 20]);
+        v.extend_from_slice(b"ee");
+        v
+    }
+
+    /// Write a minimal torrent to a temp file and return it.
+    /// Caller must keep the returned value alive for the duration of the test.
+    fn write_minimal_torrent() -> tempfile::NamedTempFile {
+        let mut f = tempfile::Builder::new()
+            .suffix(".torrent")
+            .tempfile()
+            .unwrap();
+        f.write_all(&minimal_torrent_bytes()).unwrap();
+        f
     }
 
     async fn make_engine() -> (TorrentEngine, TempDir) {
@@ -169,8 +188,9 @@ mod tests {
     #[tokio::test]
     async fn add_torrent_from_file_appears_in_list() {
         let (engine, _dir) = make_engine().await;
+        let torrent = write_minimal_torrent();
         engine
-            .add_torrent(fixture_path().to_str().unwrap())
+            .add_torrent(torrent.path().to_str().unwrap())
             .await
             .unwrap();
         let torrents = engine.list_torrents();
@@ -181,8 +201,9 @@ mod tests {
     #[tokio::test]
     async fn pause_and_resume_changes_status() {
         let (engine, _dir) = make_engine().await;
+        let torrent = write_minimal_torrent();
         engine
-            .add_torrent(fixture_path().to_str().unwrap())
+            .add_torrent(torrent.path().to_str().unwrap())
             .await
             .unwrap();
         let id = engine.list_torrents()[0].id;
@@ -208,8 +229,9 @@ mod tests {
     #[tokio::test]
     async fn remove_torrent_disappears_from_list() {
         let (engine, _dir) = make_engine().await;
+        let torrent = write_minimal_torrent();
         engine
-            .add_torrent(fixture_path().to_str().unwrap())
+            .add_torrent(torrent.path().to_str().unwrap())
             .await
             .unwrap();
         let id = engine.list_torrents()[0].id;
@@ -221,74 +243,14 @@ mod tests {
     #[tokio::test]
     async fn remove_torrent_with_delete_files() {
         let (engine, _dir) = make_engine().await;
+        let torrent = write_minimal_torrent();
         engine
-            .add_torrent(fixture_path().to_str().unwrap())
+            .add_torrent(torrent.path().to_str().unwrap())
             .await
             .unwrap();
         let id = engine.list_torrents()[0].id;
         engine.remove(id, true).await.unwrap();
         assert!(engine.list_torrents().is_empty());
-    }
-
-    /// Real network test — runs DHT, waits up to 90s for peers.
-    /// Run explicitly: cargo test -- --ignored real_dht
-    #[tokio::test]
-    #[ignore = "requires network; run with: cargo test -- --ignored --nocapture"]
-    async fn real_dht_finds_peers_for_fixture_torrent() {
-        let dir = TempDir::new().unwrap();
-        tracing_subscriber::fmt()
-            .with_env_filter("librqbit=debug")
-            .with_writer(std::io::stderr)
-            .try_init()
-            .ok();
-
-        // disable_dht_persistence so we don't collide with the running app's DHT port
-        let session = Session::new_with_opts(
-            dir.path().to_owned(),
-            SessionOptions {
-                disable_dht: false,
-                disable_dht_persistence: true,
-                fastresume: false,
-                persistence: None,
-                listen_port_range: Some(6881..6891),
-                enable_upnp_port_forwarding: true,
-                peer_id: Some(generate_azereus_style(*b"qB", (4, 6, 0, 0))),
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
-        let engine = TorrentEngine { api: Arc::new(Api::new(session, None)) };
-        engine.add_torrent(fixture_path().to_str().unwrap()).await.unwrap();
-
-        let start = std::time::Instant::now();
-        loop {
-            tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-            let rows = engine.list_torrents();
-            let row = &rows[0];
-            eprintln!(
-                "[{:>3}s] status={:<12} peers={}/{} progress={:.1}% speed={}/s",
-                start.elapsed().as_secs(),
-                format!("{:?}", row.status),
-                row.peers_live,
-                row.peers_seen,
-                row.progress_pct,
-                bytesize::ByteSize(row.down_speed_bps),
-            );
-            if row.peers_seen > 0 {
-                eprintln!("✓ peers discovered");
-                return;
-            }
-            if start.elapsed().as_secs() >= 90 {
-                break;
-            }
-        }
-        let rows = engine.list_torrents();
-        panic!(
-            "No peers found after 90s — peers_live={} peers_seen={} status={:?}. \
-             Check firewall (port 6881) or try a different torrent.",
-            rows[0].peers_live, rows[0].peers_seen, rows[0].status
-        );
     }
 
     // --- stats_to_row unit tests (no engine needed) ---

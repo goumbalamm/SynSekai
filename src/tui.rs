@@ -290,17 +290,29 @@ mod tests {
     };
     use crossterm::event::{KeyEvent, KeyEventKind, KeyEventState};
     use ratatui::{backend::TestBackend, Terminal};
-    use std::path::PathBuf;
+
     use tempfile::TempDir;
 
     // ── helpers ──────────────────────────────────────────────────────────────
 
-    fn fixture_path() -> String {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("tests/fixtures/harry-potter.torrent")
-            .to_str()
-            .unwrap()
-            .to_owned()
+    /// Build a minimal valid single-file torrent as raw bencode bytes.
+    fn minimal_torrent_bytes() -> Vec<u8> {
+        let mut v = Vec::new();
+        v.extend_from_slice(b"d4:infod6:lengthi1e4:name1:t12:piece lengthi16384e6:pieces20:");
+        v.extend_from_slice(&[0u8; 20]);
+        v.extend_from_slice(b"ee");
+        v
+    }
+
+    /// Write a minimal torrent to a temp file; caller must keep the value alive.
+    fn write_minimal_torrent() -> tempfile::NamedTempFile {
+        use std::io::Write;
+        let mut f = tempfile::Builder::new()
+            .suffix(".torrent")
+            .tempfile()
+            .unwrap();
+        f.write_all(&minimal_torrent_bytes()).unwrap();
+        f
     }
 
     async fn make_engine() -> (Arc<TorrentEngine>, TempDir) {
@@ -380,9 +392,15 @@ mod tests {
     #[tokio::test]
     async fn apply_action_add_torrent_success() {
         let (engine, _dir) = make_engine().await;
+        let torrent = write_minimal_torrent();
         let mut app = App::new();
         app.open_add_dialog();
-        apply_action(&mut app, &engine, Some(Action::AddTorrent(fixture_path()))).await;
+        apply_action(
+            &mut app,
+            &engine,
+            Some(Action::AddTorrent(torrent.path().to_str().unwrap().into())),
+        )
+        .await;
         assert_eq!(app.status_message.as_deref(), Some("Torrent added."));
         assert_eq!(app.mode, AppMode::Normal); // dismissed on success
     }
@@ -405,7 +423,8 @@ mod tests {
     #[tokio::test]
     async fn apply_action_pause_success() {
         let (engine, _dir) = make_engine().await;
-        engine.add_torrent(&fixture_path()).await.unwrap();
+        let torrent = write_minimal_torrent();
+        engine.add_torrent(torrent.path().to_str().unwrap()).await.unwrap();
         for _ in 0..20 {
             tokio::time::sleep(Duration::from_millis(100)).await;
             if engine.list_torrents()[0].status != TorrentStatus::Initializing {
@@ -429,7 +448,8 @@ mod tests {
     #[tokio::test]
     async fn apply_action_resume_success() {
         let (engine, _dir) = make_engine().await;
-        engine.add_torrent(&fixture_path()).await.unwrap();
+        let torrent = write_minimal_torrent();
+        engine.add_torrent(torrent.path().to_str().unwrap()).await.unwrap();
         for _ in 0..20 {
             tokio::time::sleep(Duration::from_millis(100)).await;
             if engine.list_torrents()[0].status != TorrentStatus::Initializing {
@@ -454,7 +474,8 @@ mod tests {
     #[tokio::test]
     async fn apply_action_remove_keep_files() {
         let (engine, _dir) = make_engine().await;
-        engine.add_torrent(&fixture_path()).await.unwrap();
+        let torrent = write_minimal_torrent();
+        engine.add_torrent(torrent.path().to_str().unwrap()).await.unwrap();
         let id = engine.list_torrents()[0].id;
         let mut app = App::new();
         apply_action(&mut app, &engine, Some(Action::Remove { id, delete_files: false })).await;
@@ -465,7 +486,8 @@ mod tests {
     #[tokio::test]
     async fn apply_action_remove_delete_files() {
         let (engine, _dir) = make_engine().await;
-        engine.add_torrent(&fixture_path()).await.unwrap();
+        let torrent = write_minimal_torrent();
+        engine.add_torrent(torrent.path().to_str().unwrap()).await.unwrap();
         let id = engine.list_torrents()[0].id;
         let mut app = App::new();
         apply_action(&mut app, &engine, Some(Action::Remove { id, delete_files: true })).await;
@@ -677,8 +699,8 @@ mod tests {
     fn add_dialog_paste_strips_single_quotes() {
         let mut app = App::new();
         app.open_add_dialog();
-        key_add_dialog(&mut app, Event::Paste("'/Users/goumbala/Downloads/harry-potter.torrent'".into()));
-        assert_eq!(app.add_input.value, "/Users/goumbala/Downloads/harry-potter.torrent");
+        key_add_dialog(&mut app, Event::Paste("'/Users/someone/Downloads/test.torrent'".into()));
+        assert_eq!(app.add_input.value, "/Users/someone/Downloads/test.torrent");
     }
 
     #[test]
