@@ -1,0 +1,3 @@
+[default]
+exclude-files = ["src/main.rs", "src/terminal.rs"]
+skip-clean = true
