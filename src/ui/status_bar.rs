@@ -4,14 +4,12 @@ mod tests {
         app::App,
         types::{AppMode, TorrentRow, TorrentStatus},
     };
-    use ratatui::{backend::TestBackend, Terminal};
+    use ratatui::{Terminal, backend::TestBackend};
 
     fn render_bar(app: &App) -> String {
         let backend = TestBackend::new(80, 1);
         let mut terminal = Terminal::new(backend).unwrap();
-        terminal
-            .draw(|f| super::render(f, app, f.area()))
-            .unwrap();
+        terminal.draw(|f| super::render(f, app, f.area())).unwrap();
         terminal
             .backend()
             .buffer()
@@ -72,13 +70,17 @@ mod tests {
             total_bytes: 0,
             progress_pct: 0.0,
             down_speed_bps: 0,
-                peers_live: 0,
-                peers_seen: 0,
+            peers_live: 0,
+            peers_seen: 0,
             status: TorrentStatus::Downloading,
         }];
         app.open_confirm_remove();
         let content = render_bar(&app);
-        assert!(content.contains("delete files") || content.contains("Remove") || content.contains("no"));
+        assert!(
+            content.contains("delete files")
+                || content.contains("Remove")
+                || content.contains("no")
+        );
     }
 
     #[test]
@@ -94,11 +96,11 @@ mod tests {
 }
 
 use ratatui::{
+    Frame,
     layout::Rect,
     style::{Color, Style},
     text::{Line, Span},
     widgets::Paragraph,
-    Frame,
 };
 
 use crate::{app::App, types::AppMode};
@@ -109,7 +111,11 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
     let line = match &app.mode {
         AppMode::Normal => {
             if let Some(msg) = &app.status_message {
-                let msg_color = if msg.starts_with("Error") { Color::Red } else { Color::Green };
+                let msg_color = if msg.starts_with("Error") {
+                    Color::Red
+                } else {
+                    Color::Green
+                };
                 Line::from(vec![
                     Span::styled(format!(" {}  ", msg), Style::default().fg(msg_color)),
                     Span::styled("│  ", Style::default().fg(Color::DarkGray)),
@@ -139,7 +145,9 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
         AppMode::ConfirmRemove { delete_files, .. } => {
             let delete_str = if *delete_files { "YES" } else { "no" };
             Line::from(Span::styled(
-                format!(" Remove torrent? [Space] delete files: {delete_str}  [Enter] Confirm  [Esc] Cancel"),
+                format!(
+                    " Remove torrent? [Space] delete files: {delete_str}  [Enter] Confirm  [Esc] Cancel"
+                ),
                 Style::default().fg(Color::Red),
             ))
         }

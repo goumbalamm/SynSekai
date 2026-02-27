@@ -1,10 +1,10 @@
 use bytesize::ByteSize;
 use ratatui::{
+    Frame,
     layout::{Constraint, Rect},
     style::{Color, Modifier, Style},
     text::Text,
     widgets::{Block, Borders, Cell, Row, Table, TableState},
-    Frame,
 };
 
 use crate::app::App;
@@ -92,7 +92,7 @@ fn format_speed(bps: u64) -> String {
 mod tests {
     use super::*;
     use crate::types::{TorrentRow, TorrentStatus};
-    use ratatui::{backend::TestBackend, Terminal};
+    use ratatui::{Terminal, backend::TestBackend};
 
     #[test]
     fn renders_without_panic_when_empty() {
@@ -110,15 +110,23 @@ mod tests {
         let mut app = App::new();
         app.torrents = vec![
             TorrentRow {
-                id: 0, name: "First".into(), total_bytes: 100,
-                progress_pct: 50.0, down_speed_bps: 0,
-                peers_live: 0, peers_seen: 0,
+                id: 0,
+                name: "First".into(),
+                total_bytes: 100,
+                progress_pct: 50.0,
+                down_speed_bps: 0,
+                peers_live: 0,
+                peers_seen: 0,
                 status: TorrentStatus::Downloading,
             },
             TorrentRow {
-                id: 1, name: "Second".into(), total_bytes: 200,
-                progress_pct: 0.0, down_speed_bps: 0,
-                peers_live: 0, peers_seen: 0,
+                id: 1,
+                name: "Second".into(),
+                total_bytes: 200,
+                progress_pct: 0.0,
+                down_speed_bps: 0,
+                peers_live: 0,
+                peers_seen: 0,
                 status: TorrentStatus::Paused,
             },
         ];
@@ -140,7 +148,8 @@ mod tests {
             total_bytes: 1_000_000,
             progress_pct: 50.0,
             down_speed_bps: 1024,
-            peers_live: 3, peers_seen: 47,
+            peers_live: 3,
+            peers_seen: 47,
             status: TorrentStatus::Downloading,
         }];
         terminal.draw(|f| render(f, &app, f.area())).unwrap();

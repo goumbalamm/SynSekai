@@ -1,5 +1,6 @@
 use crate::types::{AppMode, InputState, TorrentRow};
 
+#[derive(Default)]
 pub struct App {
     pub torrents: Vec<TorrentRow>,
     pub selected: usize,
@@ -7,19 +8,6 @@ pub struct App {
     pub add_input: InputState,
     pub status_message: Option<String>,
     pub should_quit: bool,
-}
-
-impl Default for App {
-    fn default() -> Self {
-        Self {
-            torrents: Vec::new(),
-            selected: 0,
-            mode: AppMode::default(),
-            add_input: InputState::default(),
-            status_message: None,
-            should_quit: false,
-        }
-    }
 }
 
 impl App {

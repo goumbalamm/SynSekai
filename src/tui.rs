@@ -3,15 +3,10 @@ use std::sync::Arc;
 use anyhow::Result;
 use crossterm::event::{Event, KeyCode, KeyModifiers};
 use futures::StreamExt;
-use ratatui::{backend::Backend, Terminal};
-use tokio::time::{timeout, Duration};
+use ratatui::{Terminal, backend::Backend};
+use tokio::time::{Duration, timeout};
 
-use crate::{
-    app::App,
-    engine::TorrentEngine,
-    types::AppMode,
-    ui,
-};
+use crate::{app::App, engine::TorrentEngine, types::AppMode, ui};
 
 /// Strip surrounding quotes and whitespace from a pasted/dropped path.
 fn clean_path(s: &str) -> String {
@@ -30,14 +25,13 @@ fn read_clipboard() -> Option<String> {
             .args(["-e", "POSIX path of (the clipboard as alias)"])
             .output()
             .ok();
-        if let Some(out) = out {
-            if out.status.success() {
-                if let Ok(path) = String::from_utf8(out.stdout) {
-                    let path = path.trim().to_owned();
-                    if !path.is_empty() {
-                        return Some(path);
-                    }
-                }
+        if let Some(out) = out
+            && out.status.success()
+            && let Ok(path) = String::from_utf8(out.stdout)
+        {
+            let path = path.trim().to_owned();
+            if !path.is_empty() {
+                return Some(path);
             }
         }
     }
@@ -228,7 +222,10 @@ where
                 let action = match app.mode.clone() {
                     AppMode::Normal => key_normal(&mut app, event),
                     AppMode::AddDialog => key_add_dialog(&mut app, event),
-                    AppMode::ConfirmRemove { torrent_id, delete_files } => key_confirm_remove(&mut app, event, torrent_id, delete_files),
+                    AppMode::ConfirmRemove {
+                        torrent_id,
+                        delete_files,
+                    } => key_confirm_remove(&mut app, event, torrent_id, delete_files),
                 };
                 apply_action(&mut app, &engine, action).await;
             }
@@ -271,12 +268,10 @@ pub async fn apply_action(app: &mut App, engine: &Arc<TorrentEngine>, action: Op
                 }
             }
         }
-        Some(Action::Remove { id, delete_files }) => {
-            match engine.remove(id, delete_files).await {
-                Ok(_) => app.status_message = Some("Torrent removed.".into()),
-                Err(e) => app.status_message = Some(format!("Error: {e}")),
-            }
-        }
+        Some(Action::Remove { id, delete_files }) => match engine.remove(id, delete_files).await {
+            Ok(_) => app.status_message = Some("Torrent removed.".into()),
+            Err(e) => app.status_message = Some(format!("Error: {e}")),
+        },
         None => {}
     }
 }
@@ -289,7 +284,7 @@ mod tests {
         types::{TorrentRow, TorrentStatus},
     };
     use crossterm::event::{KeyEvent, KeyEventKind, KeyEventState};
-    use ratatui::{backend::TestBackend, Terminal};
+    use ratatui::{Terminal, backend::TestBackend};
 
     use tempfile::TempDir;
 
@@ -369,22 +364,33 @@ mod tests {
     #[tokio::test]
     async fn event_loop_quits_on_q() {
         let (engine, _dir) = make_engine().await;
-        let events = futures::stream::iter(vec![Ok::<Event, std::io::Error>(key(KeyCode::Char('q')))]);
-        event_loop(&mut make_terminal(), engine, events).await.unwrap();
+        let events =
+            futures::stream::iter(vec![Ok::<Event, std::io::Error>(key(KeyCode::Char('q')))]);
+        event_loop(&mut make_terminal(), engine, events)
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
     async fn event_loop_breaks_when_stream_ends() {
         let (engine, _dir) = make_engine().await;
         let events = futures::stream::empty::<std::io::Result<Event>>();
-        event_loop(&mut make_terminal(), engine, events).await.unwrap();
+        event_loop(&mut make_terminal(), engine, events)
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
     async fn event_loop_propagates_io_error() {
         let (engine, _dir) = make_engine().await;
-        let events = futures::stream::iter(vec![Err::<Event, std::io::Error>(std::io::Error::other("test error"))]);
-        assert!(event_loop(&mut make_terminal(), engine, events).await.is_err());
+        let events = futures::stream::iter(vec![Err::<Event, std::io::Error>(
+            std::io::Error::other("test error"),
+        )]);
+        assert!(
+            event_loop(&mut make_terminal(), engine, events)
+                .await
+                .is_err()
+        );
     }
 
     // ── apply_action ──────────────────────────────────────────────────────────
@@ -416,7 +422,12 @@ mod tests {
             Some(Action::AddTorrent("/nonexistent.torrent".into())),
         )
         .await;
-        assert!(app.status_message.as_deref().unwrap_or("").starts_with("Error"));
+        assert!(
+            app.status_message
+                .as_deref()
+                .unwrap_or("")
+                .starts_with("Error")
+        );
         assert_eq!(app.mode, AppMode::AddDialog); // dialog stays open to fix the path
     }
 
@@ -424,7 +435,10 @@ mod tests {
     async fn apply_action_pause_success() {
         let (engine, _dir) = make_engine().await;
         let torrent = write_minimal_torrent();
-        engine.add_torrent(torrent.path().to_str().unwrap()).await.unwrap();
+        engine
+            .add_torrent(torrent.path().to_str().unwrap())
+            .await
+            .unwrap();
         for _ in 0..20 {
             tokio::time::sleep(Duration::from_millis(100)).await;
             if engine.list_torrents()[0].status != TorrentStatus::Initializing {
@@ -442,14 +456,22 @@ mod tests {
         let (engine, _dir) = make_engine().await;
         let mut app = App::new();
         apply_action(&mut app, &engine, Some(Action::Pause(999))).await;
-        assert!(app.status_message.as_deref().unwrap_or("").starts_with("Error"));
+        assert!(
+            app.status_message
+                .as_deref()
+                .unwrap_or("")
+                .starts_with("Error")
+        );
     }
 
     #[tokio::test]
     async fn apply_action_resume_success() {
         let (engine, _dir) = make_engine().await;
         let torrent = write_minimal_torrent();
-        engine.add_torrent(torrent.path().to_str().unwrap()).await.unwrap();
+        engine
+            .add_torrent(torrent.path().to_str().unwrap())
+            .await
+            .unwrap();
         for _ in 0..20 {
             tokio::time::sleep(Duration::from_millis(100)).await;
             if engine.list_torrents()[0].status != TorrentStatus::Initializing {
@@ -468,17 +490,33 @@ mod tests {
         let (engine, _dir) = make_engine().await;
         let mut app = App::new();
         apply_action(&mut app, &engine, Some(Action::Resume(999))).await;
-        assert!(app.status_message.as_deref().unwrap_or("").starts_with("Error"));
+        assert!(
+            app.status_message
+                .as_deref()
+                .unwrap_or("")
+                .starts_with("Error")
+        );
     }
 
     #[tokio::test]
     async fn apply_action_remove_keep_files() {
         let (engine, _dir) = make_engine().await;
         let torrent = write_minimal_torrent();
-        engine.add_torrent(torrent.path().to_str().unwrap()).await.unwrap();
+        engine
+            .add_torrent(torrent.path().to_str().unwrap())
+            .await
+            .unwrap();
         let id = engine.list_torrents()[0].id;
         let mut app = App::new();
-        apply_action(&mut app, &engine, Some(Action::Remove { id, delete_files: false })).await;
+        apply_action(
+            &mut app,
+            &engine,
+            Some(Action::Remove {
+                id,
+                delete_files: false,
+            }),
+        )
+        .await;
         assert_eq!(app.status_message.as_deref(), Some("Torrent removed."));
         assert!(engine.list_torrents().is_empty());
     }
@@ -487,10 +525,21 @@ mod tests {
     async fn apply_action_remove_delete_files() {
         let (engine, _dir) = make_engine().await;
         let torrent = write_minimal_torrent();
-        engine.add_torrent(torrent.path().to_str().unwrap()).await.unwrap();
+        engine
+            .add_torrent(torrent.path().to_str().unwrap())
+            .await
+            .unwrap();
         let id = engine.list_torrents()[0].id;
         let mut app = App::new();
-        apply_action(&mut app, &engine, Some(Action::Remove { id, delete_files: true })).await;
+        apply_action(
+            &mut app,
+            &engine,
+            Some(Action::Remove {
+                id,
+                delete_files: true,
+            }),
+        )
+        .await;
         assert_eq!(app.status_message.as_deref(), Some("Torrent removed."));
     }
 
@@ -498,8 +547,21 @@ mod tests {
     async fn apply_action_remove_invalid_id_sets_error() {
         let (engine, _dir) = make_engine().await;
         let mut app = App::new();
-        apply_action(&mut app, &engine, Some(Action::Remove { id: 999, delete_files: false })).await;
-        assert!(app.status_message.as_deref().unwrap_or("").starts_with("Error"));
+        apply_action(
+            &mut app,
+            &engine,
+            Some(Action::Remove {
+                id: 999,
+                delete_files: false,
+            }),
+        )
+        .await;
+        assert!(
+            app.status_message
+                .as_deref()
+                .unwrap_or("")
+                .starts_with("Error")
+        );
     }
 
     // ── key_normal ────────────────────────────────────────────────────────────
@@ -507,13 +569,19 @@ mod tests {
     #[test]
     fn normal_q_quits() {
         let mut app = App::new();
-        assert_eq!(key_normal(&mut app, key(KeyCode::Char('q'))), Some(Action::Quit));
+        assert_eq!(
+            key_normal(&mut app, key(KeyCode::Char('q'))),
+            Some(Action::Quit)
+        );
     }
 
     #[test]
     fn normal_ctrl_c_quits() {
         let mut app = App::new();
-        assert_eq!(key_normal(&mut app, ctrl(KeyCode::Char('c'))), Some(Action::Quit));
+        assert_eq!(
+            key_normal(&mut app, ctrl(KeyCode::Char('c'))),
+            Some(Action::Quit)
+        );
     }
 
     #[test]
@@ -563,14 +631,20 @@ mod tests {
     #[test]
     fn normal_p_on_downloading_returns_pause() {
         let mut app = app_with_torrents(1);
-        assert_eq!(key_normal(&mut app, key(KeyCode::Char('p'))), Some(Action::Pause(0)));
+        assert_eq!(
+            key_normal(&mut app, key(KeyCode::Char('p'))),
+            Some(Action::Pause(0))
+        );
     }
 
     #[test]
     fn normal_p_on_paused_returns_resume() {
         let mut app = app_with_torrents(1);
         app.torrents[0].status = TorrentStatus::Paused;
-        assert_eq!(key_normal(&mut app, key(KeyCode::Char('p'))), Some(Action::Resume(0)));
+        assert_eq!(
+            key_normal(&mut app, key(KeyCode::Char('p'))),
+            Some(Action::Resume(0))
+        );
     }
 
     #[test]
@@ -682,7 +756,10 @@ mod tests {
         let mut app = App::new();
         app.open_add_dialog();
         app.add_input.push('x'); // pre-existing content replaced by paste
-        assert_eq!(key_add_dialog(&mut app, Event::Paste("/tmp/my file.torrent".into())), None);
+        assert_eq!(
+            key_add_dialog(&mut app, Event::Paste("/tmp/my file.torrent".into())),
+            None
+        );
         assert_eq!(app.add_input.value, "/tmp/my file.torrent");
         assert_eq!(app.add_input.cursor, "/tmp/my file.torrent".len());
     }
@@ -699,7 +776,10 @@ mod tests {
     fn add_dialog_paste_strips_single_quotes() {
         let mut app = App::new();
         app.open_add_dialog();
-        key_add_dialog(&mut app, Event::Paste("'/Users/someone/Downloads/test.torrent'".into()));
+        key_add_dialog(
+            &mut app,
+            Event::Paste("'/Users/someone/Downloads/test.torrent'".into()),
+        );
         assert_eq!(app.add_input.value, "/Users/someone/Downloads/test.torrent");
     }
 
@@ -851,7 +931,10 @@ mod tests {
     fn confirm_esc_dismisses() {
         let mut app = app_with_torrents(1);
         app.open_confirm_remove();
-        assert_eq!(key_confirm_remove(&mut app, key(KeyCode::Esc), 0, false), None);
+        assert_eq!(
+            key_confirm_remove(&mut app, key(KeyCode::Esc), 0, false),
+            None
+        );
         assert_eq!(app.mode, AppMode::Normal);
     }
 
@@ -859,8 +942,17 @@ mod tests {
     fn confirm_space_toggles_delete_files() {
         let mut app = app_with_torrents(1);
         app.open_confirm_remove();
-        assert_eq!(key_confirm_remove(&mut app, key(KeyCode::Char(' ')), 0, false), None);
-        assert!(matches!(app.mode, AppMode::ConfirmRemove { delete_files: true, .. }));
+        assert_eq!(
+            key_confirm_remove(&mut app, key(KeyCode::Char(' ')), 0, false),
+            None
+        );
+        assert!(matches!(
+            app.mode,
+            AppMode::ConfirmRemove {
+                delete_files: true,
+                ..
+            }
+        ));
     }
 
     #[test]
@@ -868,7 +960,13 @@ mod tests {
         let mut app = app_with_torrents(1);
         app.open_confirm_remove();
         let action = key_confirm_remove(&mut app, key(KeyCode::Enter), 0, false);
-        assert_eq!(action, Some(Action::Remove { id: 0, delete_files: false }));
+        assert_eq!(
+            action,
+            Some(Action::Remove {
+                id: 0,
+                delete_files: false
+            })
+        );
         assert_eq!(app.mode, AppMode::Normal);
     }
 
@@ -877,20 +975,32 @@ mod tests {
         let mut app = app_with_torrents(1);
         app.open_confirm_remove();
         let action = key_confirm_remove(&mut app, key(KeyCode::Enter), 0, true);
-        assert_eq!(action, Some(Action::Remove { id: 0, delete_files: true }));
+        assert_eq!(
+            action,
+            Some(Action::Remove {
+                id: 0,
+                delete_files: true
+            })
+        );
     }
 
     #[test]
     fn confirm_ignores_non_key_event() {
         let mut app = app_with_torrents(1);
         app.open_confirm_remove();
-        assert_eq!(key_confirm_remove(&mut app, Event::FocusGained, 0, false), None);
+        assert_eq!(
+            key_confirm_remove(&mut app, Event::FocusGained, 0, false),
+            None
+        );
     }
 
     #[test]
     fn confirm_unknown_key_returns_none() {
         let mut app = app_with_torrents(1);
         app.open_confirm_remove();
-        assert_eq!(key_confirm_remove(&mut app, key(KeyCode::F(3)), 0, false), None);
+        assert_eq!(
+            key_confirm_remove(&mut app, key(KeyCode::F(3)), 0, false),
+            None
+        );
     }
 }

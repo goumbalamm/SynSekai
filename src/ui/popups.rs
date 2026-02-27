@@ -1,10 +1,16 @@
 #[cfg(test)]
 mod tests {
     use crate::app::App;
-    use ratatui::{backend::TestBackend, Terminal};
+    use ratatui::{Terminal, backend::TestBackend};
 
     fn buf_content(terminal: &Terminal<TestBackend>) -> String {
-        terminal.backend().buffer().content().iter().map(|c| c.symbol()).collect()
+        terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect()
     }
 
     #[test]
@@ -13,7 +19,9 @@ mod tests {
         let mut terminal = Terminal::new(backend).unwrap();
         let mut app = App::new();
         app.open_add_dialog();
-        terminal.draw(|f| super::render_add_dialog(f, &app, f.area())).unwrap();
+        terminal
+            .draw(|f| super::render_add_dialog(f, &app, f.area()))
+            .unwrap();
     }
 
     #[test]
@@ -26,7 +34,9 @@ mod tests {
         app.add_input.push('t');
         app.add_input.push('m');
         app.add_input.push('p');
-        terminal.draw(|f| super::render_add_dialog(f, &app, f.area())).unwrap();
+        terminal
+            .draw(|f| super::render_add_dialog(f, &app, f.area()))
+            .unwrap();
         let content = buf_content(&terminal);
         assert!(content.contains("/tmp"));
     }
@@ -75,11 +85,11 @@ mod tests {
 }
 
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Clear, Paragraph},
-    Frame,
 };
 
 use crate::app::App;
@@ -143,12 +153,7 @@ pub fn render_add_dialog(f: &mut Frame, app: &App, area: Rect) {
     f.render_widget(hint, chunks[1]);
 }
 
-pub fn render_confirm_remove(
-    f: &mut Frame,
-    torrent_id: usize,
-    delete_files: bool,
-    area: Rect,
-) {
+pub fn render_confirm_remove(f: &mut Frame, torrent_id: usize, delete_files: bool, area: Rect) {
     let popup_area = centered_rect(50, 6, area);
     f.render_widget(Clear, popup_area);
 
@@ -163,10 +168,7 @@ pub fn render_confirm_remove(
         Line::from(""),
         Line::from(vec![
             Span::raw(" Delete files: "),
-            Span::styled(
-                if delete_files { "YES" } else { "no" },
-                delete_style,
-            ),
+            Span::styled(if delete_files { "YES" } else { "no" }, delete_style),
         ]),
         Line::from(""),
         Line::from(Span::styled(

@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use crossterm::event::EventStream;
-use ratatui::{backend::CrosstermBackend, Terminal};
+use ratatui::{Terminal, backend::CrosstermBackend};
 
 use crate::{engine::TorrentEngine, tui::event_loop};
 

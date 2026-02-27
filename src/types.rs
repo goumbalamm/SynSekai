@@ -107,19 +107,15 @@ impl InputState {
     /// Skips trailing non-word chars then skips the word.
     pub fn move_word_left(&mut self) {
         let s = &self.value[..self.cursor];
-        let mut idx = self.cursor;
-        // skip non-alphanumeric
         let chars: Vec<(usize, char)> = s.char_indices().collect();
         let mut i = chars.len();
         while i > 0 && !chars[i - 1].1.is_alphanumeric() {
             i -= 1;
         }
-        // skip word chars
         while i > 0 && chars[i - 1].1.is_alphanumeric() {
             i -= 1;
         }
-        idx = if i == 0 { 0 } else { chars[i].0 };
-        self.cursor = idx;
+        self.cursor = if i == 0 { 0 } else { chars[i].0 };
     }
 
     /// Move cursor right by one word (bash/readline Ctrl+Right).
@@ -281,7 +277,10 @@ mod tests {
 
     #[test]
     fn move_word_right_skips_word() {
-        let mut s = InputState { value: "hello world".into(), cursor: 0 };
+        let mut s = InputState {
+            value: "hello world".into(),
+            cursor: 0,
+        };
         s.move_word_right();
         assert_eq!(s.cursor, 5); // after "hello"
         s.move_word_right();
@@ -290,7 +289,10 @@ mod tests {
 
     #[test]
     fn move_word_left_skips_word() {
-        let mut s = InputState { value: "hello world".into(), cursor: 11 };
+        let mut s = InputState {
+            value: "hello world".into(),
+            cursor: 11,
+        };
         s.move_word_left();
         assert_eq!(s.cursor, 6); // start of "world"
         s.move_word_left();
@@ -299,28 +301,40 @@ mod tests {
 
     #[test]
     fn move_word_left_from_middle_of_word() {
-        let mut s = InputState { value: "hello".into(), cursor: 3 };
+        let mut s = InputState {
+            value: "hello".into(),
+            cursor: 3,
+        };
         s.move_word_left();
         assert_eq!(s.cursor, 0);
     }
 
     #[test]
     fn move_word_right_clamps_at_end() {
-        let mut s = InputState { value: "hello".into(), cursor: 5 };
+        let mut s = InputState {
+            value: "hello".into(),
+            cursor: 5,
+        };
         s.move_word_right();
         assert_eq!(s.cursor, 5);
     }
 
     #[test]
     fn move_word_left_clamps_at_start() {
-        let mut s = InputState { value: "hello".into(), cursor: 0 };
+        let mut s = InputState {
+            value: "hello".into(),
+            cursor: 0,
+        };
         s.move_word_left();
         assert_eq!(s.cursor, 0);
     }
 
     #[test]
     fn delete_word_back_removes_word() {
-        let mut s = InputState { value: "hello world".into(), cursor: 11 };
+        let mut s = InputState {
+            value: "hello world".into(),
+            cursor: 11,
+        };
         s.delete_word_back();
         assert_eq!(s.value, "hello ");
         assert_eq!(s.cursor, 6);
@@ -328,7 +342,10 @@ mod tests {
 
     #[test]
     fn delete_word_back_skips_spaces_first() {
-        let mut s = InputState { value: "hello   ".into(), cursor: 8 };
+        let mut s = InputState {
+            value: "hello   ".into(),
+            cursor: 8,
+        };
         s.delete_word_back();
         assert_eq!(s.value, "");
         assert_eq!(s.cursor, 0);
@@ -336,7 +353,10 @@ mod tests {
 
     #[test]
     fn delete_word_forward_removes_word() {
-        let mut s = InputState { value: "hello world".into(), cursor: 0 };
+        let mut s = InputState {
+            value: "hello world".into(),
+            cursor: 0,
+        };
         s.delete_word_forward();
         assert_eq!(s.value, " world");
         assert_eq!(s.cursor, 0);
@@ -344,7 +364,10 @@ mod tests {
 
     #[test]
     fn delete_word_forward_skips_spaces_first() {
-        let mut s = InputState { value: "   world".into(), cursor: 0 };
+        let mut s = InputState {
+            value: "   world".into(),
+            cursor: 0,
+        };
         s.delete_word_forward();
         assert_eq!(s.value, "");
         assert_eq!(s.cursor, 0);
@@ -352,7 +375,10 @@ mod tests {
 
     #[test]
     fn delete_to_end_truncates() {
-        let mut s = InputState { value: "hello world".into(), cursor: 5 };
+        let mut s = InputState {
+            value: "hello world".into(),
+            cursor: 5,
+        };
         s.delete_to_end();
         assert_eq!(s.value, "hello");
         assert_eq!(s.cursor, 5);
@@ -360,7 +386,10 @@ mod tests {
 
     #[test]
     fn delete_to_start_clears_before_cursor() {
-        let mut s = InputState { value: "hello world".into(), cursor: 6 };
+        let mut s = InputState {
+            value: "hello world".into(),
+            cursor: 6,
+        };
         s.delete_to_start();
         assert_eq!(s.value, "world");
         assert_eq!(s.cursor, 0);

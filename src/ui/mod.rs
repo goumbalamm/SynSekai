@@ -4,13 +4,19 @@ mod tests {
         app::App,
         types::{TorrentRow, TorrentStatus},
     };
-    use ratatui::{backend::TestBackend, Terminal};
+    use ratatui::{Terminal, backend::TestBackend};
 
     fn render_app(app: &App) -> String {
         let backend = TestBackend::new(80, 24);
         let mut terminal = Terminal::new(backend).unwrap();
         terminal.draw(|f| super::render(f, app)).unwrap();
-        terminal.backend().buffer().content().iter().map(|c| c.symbol()).collect()
+        terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect()
     }
 
     #[test]
@@ -28,8 +34,8 @@ mod tests {
             total_bytes: 1_000_000,
             progress_pct: 50.0,
             down_speed_bps: 2048,
-                peers_live: 0,
-                peers_seen: 0,
+            peers_live: 0,
+            peers_seen: 0,
             status: TorrentStatus::Downloading,
         }];
         let content = render_app(&app);
@@ -52,8 +58,8 @@ mod tests {
             total_bytes: 0,
             progress_pct: 0.0,
             down_speed_bps: 0,
-                peers_live: 0,
-                peers_seen: 0,
+            peers_live: 0,
+            peers_seen: 0,
             status: TorrentStatus::Downloading,
         }];
         app.open_confirm_remove();
@@ -66,8 +72,8 @@ pub mod status_bar;
 pub mod torrent_table;
 
 use ratatui::{
-    layout::{Constraint, Direction, Layout},
     Frame,
+    layout::{Constraint, Direction, Layout},
 };
 
 use crate::app::App;

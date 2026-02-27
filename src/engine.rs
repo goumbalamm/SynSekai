@@ -2,9 +2,10 @@ use std::{path::PathBuf, sync::Arc};
 
 use anyhow::Context;
 use librqbit::{
+    AddTorrent, AddTorrentOptions, Api, Session, SessionOptions, SessionPersistenceConfig,
+    TorrentStats, TorrentStatsState,
     api::{ApiTorrentListOpts, TorrentIdOrHash},
-    generate_azereus_style, AddTorrent, AddTorrentOptions, Api, Session, SessionOptions,
-    SessionPersistenceConfig, TorrentStats, TorrentStatsState,
+    generate_azereus_style,
 };
 
 use crate::types::{TorrentRow, TorrentStatus};
@@ -306,7 +307,13 @@ mod tests {
 
     #[test]
     fn stats_to_row_error_with_message() {
-        let stats = fake_stats(TorrentStatsState::Error, false, 0, 0, Some("disk full".into()));
+        let stats = fake_stats(
+            TorrentStatsState::Error,
+            false,
+            0,
+            0,
+            Some("disk full".into()),
+        );
         let row = super::stats_to_row(0, "t".into(), stats);
         assert_eq!(row.status, TorrentStatus::Error("disk full".into()));
     }
