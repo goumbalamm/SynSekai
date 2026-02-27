@@ -8,6 +8,9 @@ Instructions for Claude Code when working in this repository.
 
 - **Never add `Co-Authored-By: Claude` lines** to commit messages.
 - Commits are authored solely by the repository owner.
+- Follow conventional commits: `feat:`, `fix:`, `test:`, `docs:`, `refactor:`, `ci:`.
+- Do not push without being asked.
+- Do not force-push `main` without being asked.
 
 ---
 
@@ -18,9 +21,10 @@ Standalone Rust TUI torrent client.
 - **Binary**: `synsekai` (`src/main.rs`)
 - **Stack**: Rust 2024 · librqbit 8 · ratatui 0.29 · crossterm 0.28 · tokio
 - **Build**: `cargo build --release`
+- **Run**: `cargo run -- --output-dir /tmp/dl`
 - **Test**: `cargo test`
 - **Hot reload**: `cargo watch -x run`
-- **Coverage**: `cargo tarpaulin --config tarpaulin.toml`
+- **Coverage (local)**: `cargo tarpaulin --config tarpaulin.toml`
 
 ---
 
@@ -28,10 +32,10 @@ Standalone Rust TUI torrent client.
 
 ```
 src/
-├── main.rs          # CLI entry point (clap)
+├── main.rs          # CLI entry point (clap) — excluded from coverage
 ├── app.rs           # Pure UI state — no I/O, fully unit-testable
 ├── engine.rs        # librqbit wrapper — all torrent I/O lives here
-├── terminal.rs      # Terminal setup / teardown (alternate screen, raw mode, panic hook)
+├── terminal.rs      # Terminal setup / teardown (alternate screen, raw mode, panic hook) — excluded from coverage
 ├── tui.rs           # Async event loop + pure key handlers (key_normal, key_add_dialog, …)
 ├── types.rs         # Shared types: TorrentRow, AppMode, InputState
 └── ui/
@@ -43,6 +47,10 @@ src/
 patches/
 └── librqbit-tracker-comms/   # Local patch — preserves announce_sig/announce_ts query params
                                # Wired via [patch.crates-io] in Cargo.toml
+
+.github/
+└── workflows/
+    └── ci.yml            # CI: fmt, clippy, build, test, coverage → Codecov
 ```
 
 ---
@@ -50,8 +58,8 @@ patches/
 ## Architecture rules
 
 - `engine.rs` is the **only** file that imports librqbit types. No other module touches librqbit directly.
-- `app.rs` holds pure state; it never calls async code or engine methods.
-- `tui.rs` key handlers return `Option<Action>` — they are pure functions testable without a terminal.
+- `app.rs` holds pure UI state — never calls async code or engine methods. `#[derive(Default)]` on `App`.
+- `tui.rs` key handlers return `Option<Action>` — pure functions testable without a terminal.
 - Never hold the app state lock across an `.await` on the engine.
 
 ---
@@ -87,8 +95,8 @@ api.api_torrent_action_delete(TorrentIdOrHash::Id(id))
 ```
 
 - `Session::new_with_opts` returns `Arc<Session>` — do **not** wrap in `Arc::new()` again.
-- After adding a torrent the status is `Initializing` briefly — poll with 100 ms sleeps before pausing in tests.
 - `features = ["default-tls"]` is required on librqbit when `default-features = false`.
+- After adding a torrent the status is `Initializing` briefly — poll with 100 ms sleeps before pausing in tests.
 
 ---
 
@@ -96,7 +104,7 @@ api.api_torrent_action_delete(TorrentIdOrHash::Id(id))
 
 `librqbit-tracker-comms 3.0.0` used `tracker_url.set_query(…)` which replaced the entire query string, stripping `announce_sig`/`announce_ts` from private tracker URLs (Ygg, etc.).
 
-The local patch at `patches/librqbit-tracker-comms/` preserves existing query params and appends standard tracker params after them. It is wired via `[patch.crates-io]` in `Cargo.toml`.
+The local patch at `patches/librqbit-tracker-comms/` preserves existing query params and appends standard tracker params after them. Wired via `[patch.crates-io]` in `Cargo.toml`.
 
 ---
 
@@ -121,13 +129,26 @@ fn write_minimal_torrent() -> tempfile::NamedTempFile {
     use std::io::Write;
     let mut f = tempfile::Builder::new().suffix(".torrent").tempfile().unwrap();
     f.write_all(&minimal_torrent_bytes()).unwrap();
-    f
+    f  // keep alive for the duration of the test — drops = deletes the file
 }
 ```
 
-Keep the `NamedTempFile` bound for the duration of the test — it deletes on drop.
+- The one ignored test (`real_dht_finds_peers_for_fixture_torrent`) requires a real `.torrent` file and network; run manually with `cargo test -- --ignored --nocapture`.
 
-- The one ignored test (`real_dht_finds_peers_for_fixture_torrent`) requires a real torrent file and network; run manually with `cargo test -- --ignored --nocapture`.
+---
+
+## CI / GitHub
+
+- **Workflow**: `.github/workflows/ci.yml` — runs on push and PR to `main`.
+  - Steps: `cargo fmt --check` → `cargo clippy -D warnings` → `cargo build --release` → `cargo test` → tarpaulin coverage → Codecov upload.
+  - Uses `taiki-e/install-action` to install `cargo-tarpaulin` in CI.
+  - Codecov token stored as `CODECOV_TOKEN` GitHub secret.
+- **Branch protection on `main`**:
+  - All changes via PR — no direct pushes.
+  - CI (`Build & Test`) must pass before merge.
+  - 1 approving review required; stale reviews dismissed on new commits.
+  - Force pushes blocked.
+- **Coverage exclusions** (in `tarpaulin.toml`): `src/main.rs`, `src/terminal.rs`.
 
 ---
 
@@ -137,14 +158,28 @@ Keep the `NamedTempFile` bound for the duration of the test — it deletes on dr
 - No `unwrap()` in production code — use `?` and `anyhow`.
 - No dead fields or unused imports — fix warnings before committing.
 - Do not add docstrings, comments, or type annotations to code that wasn't changed.
-- Do not leave debug panels, eprintln!, or temporary logging in committed code.
+- Do not leave debug panels, `eprintln!`, or temporary logging in committed code.
 - Keep UI state (`app.rs`) and I/O (`engine.rs`) strictly separated.
+- Clippy is run with `-D warnings` — zero tolerance for warnings.
 
 ---
 
-## Git workflow
+## Input editing (add-dialog)
 
-- Commit messages follow conventional commits (`feat:`, `fix:`, `test:`, `docs:`, `refactor:`).
-- No `Co-Authored-By: Claude` trailers — ever.
-- Do not push without being asked.
-- Do not force-push `main` without being asked.
+Full readline-style shortcuts implemented in `key_add_dialog` (`tui.rs`) backed by `InputState` methods (`types.rs`):
+
+| Key | Action |
+|-----|--------|
+| `←` / `→` | Move char |
+| `Ctrl+←` / `Ctrl+→` | Move word |
+| `Home` / `Ctrl+A` | Start of line |
+| `End` / `Ctrl+E` | End of line |
+| `Backspace` | Delete char back |
+| `Ctrl+Backspace` / `Ctrl+W` | Delete word back |
+| `Ctrl+Delete` | Delete word forward |
+| `Ctrl+K` | Delete to end |
+| `Ctrl+U` | Delete to start |
+| `Ctrl+V` | Paste (macOS: tries osascript for file refs first, falls back to arboard) |
+| `Ctrl+C` | Copy to clipboard |
+| `Enter` | Submit (strips surrounding quotes) |
+| `Esc` | Cancel |
