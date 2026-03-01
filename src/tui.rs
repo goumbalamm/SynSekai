@@ -313,10 +313,8 @@ pub fn key_spoofer(app: &mut App, event: Event) -> Option<Action> {
                         | Some(SpooferField::DownloadRate) => c.is_ascii_digit(),
                         _ => true,
                     };
-                    if allow {
-                        if let Some(input) = active_input(app) {
-                            input.push(c);
-                        }
+                    if allow && let Some(input) = active_input(app) {
+                        input.push(c);
                     }
                 } else {
                     match c {
