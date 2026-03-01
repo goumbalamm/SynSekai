@@ -10,6 +10,13 @@ use librqbit::{
 
 use crate::types::{TorrentRow, TorrentStatus};
 
+pub struct TorrentMeta {
+    pub info_hash_hex: String,
+    /// Announce URLs found in the torrent (may be empty if not exposed by the API).
+    pub tracker_urls: Vec<String>,
+    pub total_bytes: u64,
+}
+
 /// Maps a librqbit `TorrentStats` into a display `TorrentRow`.
 /// Extracted so it can be unit-tested with fake stats.
 pub(crate) fn stats_to_row(id: usize, name: String, stats: TorrentStats) -> TorrentRow {
@@ -130,6 +137,20 @@ impl TorrentEngine {
             .await
             .map(|_| ())
             .map_err(|e| anyhow::anyhow!("{e}"))
+    }
+
+    /// Return lightweight metadata needed to build a spoofer config.
+    pub fn get_torrent_meta(&self, id: usize) -> Option<TorrentMeta> {
+        let list = self
+            .api
+            .api_torrent_list_ext(ApiTorrentListOpts { with_stats: true });
+        let item = list.torrents.into_iter().find(|t| t.id == Some(id))?;
+        let total_bytes = item.stats.as_ref().map(|s| s.total_bytes).unwrap_or(0);
+        Some(TorrentMeta {
+            info_hash_hex: item.info_hash,
+            tracker_urls: vec![],
+            total_bytes,
+        })
     }
 
     pub async fn remove(&self, id: usize, delete_files: bool) -> anyhow::Result<()> {

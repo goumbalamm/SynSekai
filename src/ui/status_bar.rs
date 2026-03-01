@@ -2,7 +2,7 @@
 mod tests {
     use crate::{
         app::App,
-        types::{AppMode, TorrentRow, TorrentStatus},
+        types::{AppMode, AppView, TorrentRow, TorrentStatus},
     };
     use ratatui::{Terminal, backend::TestBackend};
 
@@ -84,6 +84,14 @@ mod tests {
     }
 
     #[test]
+    fn spoofer_view_shows_hints() {
+        let mut app = App::new();
+        app.view = AppView::Spoofer;
+        let content = render_bar(&app);
+        assert!(content.contains("Enter") || content.contains("Switch"));
+    }
+
+    #[test]
     fn confirm_remove_delete_files_true_shows_yes() {
         let mut app = App::new();
         app.mode = AppMode::ConfirmRemove {
@@ -103,54 +111,61 @@ use ratatui::{
     widgets::Paragraph,
 };
 
-use crate::{app::App, types::AppMode};
+use crate::{app::App, types::{AppMode, AppView}};
 
-const NORMAL_HINTS: &str = "[a] Add  [p] Pause/Resume  [d] Remove  [↑↓/jk] Nav  [q] Quit";
+const NORMAL_HINTS: &str =
+    "[a] Add  [p] Pause  [d] Del  [b] Boost  [jk] Nav  [q] Quit  [←→] View";
 
 pub fn render(f: &mut Frame, app: &App, area: Rect) {
-    let line = match &app.mode {
-        AppMode::Normal => {
-            if let Some(msg) = &app.status_message {
-                let msg_color = if msg.starts_with("Error") {
-                    Color::Red
+    let line = match app.view {
+        AppView::Spoofer => Line::from(Span::styled(
+            " [Enter] Start  [s] Stop  [↑↓] Field  [c] Next client  [←→] Switch tab",
+            Style::default().fg(Color::Cyan),
+        )),
+        AppView::Downloader => match &app.mode {
+            AppMode::Normal => {
+                if let Some(msg) = &app.status_message {
+                    let msg_color = if msg.starts_with("Error") {
+                        Color::Red
+                    } else {
+                        Color::Green
+                    };
+                    Line::from(vec![
+                        Span::styled(format!(" {}  ", msg), Style::default().fg(msg_color)),
+                        Span::styled("│  ", Style::default().fg(Color::DarkGray)),
+                        Span::styled(NORMAL_HINTS, Style::default().fg(Color::White)),
+                    ])
                 } else {
-                    Color::Green
-                };
-                Line::from(vec![
-                    Span::styled(format!(" {}  ", msg), Style::default().fg(msg_color)),
-                    Span::styled("│  ", Style::default().fg(Color::DarkGray)),
-                    Span::styled(NORMAL_HINTS, Style::default().fg(Color::White)),
-                ])
-            } else {
+                    Line::from(Span::styled(
+                        format!(" {NORMAL_HINTS}"),
+                        Style::default().fg(Color::White),
+                    ))
+                }
+            }
+            AppMode::AddDialog => {
+                if let Some(msg) = &app.status_message {
+                    Line::from(vec![
+                        Span::styled(format!(" {}  ", msg), Style::default().fg(Color::Red)),
+                        Span::styled("│  ", Style::default().fg(Color::DarkGray)),
+                        Span::styled("[Esc] Cancel", Style::default().fg(Color::Yellow)),
+                    ])
+                } else {
+                    Line::from(Span::styled(
+                        " Enter path or magnet link  [Enter] Add  [Esc] Cancel",
+                        Style::default().fg(Color::Yellow),
+                    ))
+                }
+            }
+            AppMode::ConfirmRemove { delete_files, .. } => {
+                let delete_str = if *delete_files { "YES" } else { "no" };
                 Line::from(Span::styled(
-                    format!(" {NORMAL_HINTS}"),
-                    Style::default().fg(Color::White),
+                    format!(
+                        " Remove torrent? [Space] delete files: {delete_str}  [Enter] Confirm  [Esc] Cancel"
+                    ),
+                    Style::default().fg(Color::Red),
                 ))
             }
-        }
-        AppMode::AddDialog => {
-            if let Some(msg) = &app.status_message {
-                Line::from(vec![
-                    Span::styled(format!(" {}  ", msg), Style::default().fg(Color::Red)),
-                    Span::styled("│  ", Style::default().fg(Color::DarkGray)),
-                    Span::styled("[Esc] Cancel", Style::default().fg(Color::Yellow)),
-                ])
-            } else {
-                Line::from(Span::styled(
-                    " Enter path or magnet link  [Enter] Add  [Esc] Cancel",
-                    Style::default().fg(Color::Yellow),
-                ))
-            }
-        }
-        AppMode::ConfirmRemove { delete_files, .. } => {
-            let delete_str = if *delete_files { "YES" } else { "no" };
-            Line::from(Span::styled(
-                format!(
-                    " Remove torrent? [Space] delete files: {delete_str}  [Enter] Confirm  [Esc] Cancel"
-                ),
-                Style::default().fg(Color::Red),
-            ))
-        }
+        },
     };
 
     let para = Paragraph::new(line).style(Style::default().bg(Color::DarkGray));

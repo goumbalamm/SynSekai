@@ -33,6 +33,13 @@ impl TorrentStatus {
 }
 
 #[derive(Clone, Default, PartialEq, Debug)]
+pub enum AppView {
+    #[default]
+    Downloader,
+    Spoofer,
+}
+
+#[derive(Clone, Default, PartialEq, Debug)]
 pub enum AppMode {
     #[default]
     Normal,
@@ -41,6 +48,68 @@ pub enum AppMode {
         torrent_id: usize,
         delete_files: bool,
     },
+}
+
+#[derive(Clone, Copy, PartialEq, Debug, Default)]
+pub enum ClientProfile {
+    #[default]
+    QBittorrent4_6,
+    UTorrent3_3_2,
+    Transmission2_92,
+}
+
+impl ClientProfile {
+    pub fn peer_id_prefix(self) -> &'static str {
+        match self {
+            Self::QBittorrent4_6 => "-qB4600-",
+            Self::UTorrent3_3_2 => "-UT3320-",
+            Self::Transmission2_92 => "-TR292-",
+        }
+    }
+
+    pub fn user_agent(self) -> &'static str {
+        match self {
+            Self::QBittorrent4_6 => "qBittorrent/4.6.0",
+            Self::UTorrent3_3_2 => "uTorrent/3320(25302)",
+            Self::Transmission2_92 => "Transmission/2.92",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::QBittorrent4_6 => "qBittorrent 4.6",
+            Self::UTorrent3_3_2 => "uTorrent 3.3.2",
+            Self::Transmission2_92 => "Transmission 2.92",
+        }
+    }
+
+    pub fn all() -> &'static [ClientProfile] {
+        &[
+            Self::QBittorrent4_6,
+            Self::UTorrent3_3_2,
+            Self::Transmission2_92,
+        ]
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct SpooferSnapshot {
+    pub uploaded: u64,
+    pub downloaded: u64,
+    pub seeders: Option<i64>,
+    pub leechers: Option<i64>,
+    pub interval_secs: u64,
+    pub countdown_secs: u64,
+    pub running: bool,
+    pub last_error: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum SpooferField {
+    #[default]
+    UploadRate,
+    DownloadRate,
+    TrackerUrl,
 }
 
 #[derive(Default, Debug, Clone)]

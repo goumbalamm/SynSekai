@@ -1,5 +1,6 @@
 mod app;
 mod engine;
+mod spoofer;
 mod terminal;
 mod tui;
 mod types;

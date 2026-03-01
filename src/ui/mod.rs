@@ -2,7 +2,7 @@
 mod tests {
     use crate::{
         app::App,
-        types::{TorrentRow, TorrentStatus},
+        types::{AppView, TorrentRow, TorrentStatus},
     };
     use ratatui::{Terminal, backend::TestBackend};
 
@@ -50,6 +50,13 @@ mod tests {
     }
 
     #[test]
+    fn full_render_spoofer_view() {
+        let mut app = App::new();
+        app.view = AppView::Spoofer;
+        render_app(&app); // must not panic
+    }
+
+    #[test]
     fn full_render_confirm_remove_mode() {
         let mut app = App::new();
         app.torrents = vec![TorrentRow {
@@ -68,7 +75,9 @@ mod tests {
 }
 
 pub mod popups;
+pub mod spoofer_panel;
 pub mod status_bar;
+pub mod tab_bar;
 pub mod torrent_table;
 
 use ratatui::{
@@ -76,29 +85,42 @@ use ratatui::{
     layout::{Constraint, Direction, Layout},
 };
 
-use crate::app::App;
+use crate::{app::App, types::AppView};
 
 pub fn render(f: &mut Frame, app: &App) {
     let area = f.area();
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Min(0), Constraint::Length(1)])
+        .constraints([
+            Constraint::Length(1), // tab bar
+            Constraint::Min(0),    // content
+            Constraint::Length(1), // status bar
+        ])
         .split(area);
 
-    torrent_table::render(f, app, chunks[0]);
-    status_bar::render(f, app, chunks[1]);
+    tab_bar::render(f, app, chunks[0]);
+    status_bar::render(f, app, chunks[2]);
 
-    // Overlays rendered last so they appear on top
-    match &app.mode {
-        crate::types::AppMode::AddDialog => {
-            popups::render_add_dialog(f, app, area);
+    match app.view {
+        AppView::Downloader => {
+            torrent_table::render(f, app, chunks[1]);
+
+            // Overlays rendered last so they appear on top
+            match &app.mode {
+                crate::types::AppMode::AddDialog => {
+                    popups::render_add_dialog(f, app, chunks[1]);
+                }
+                crate::types::AppMode::ConfirmRemove {
+                    torrent_id,
+                    delete_files,
+                } => {
+                    popups::render_confirm_remove(f, *torrent_id, *delete_files, chunks[1]);
+                }
+                crate::types::AppMode::Normal => {}
+            }
         }
-        crate::types::AppMode::ConfirmRemove {
-            torrent_id,
-            delete_files,
-        } => {
-            popups::render_confirm_remove(f, *torrent_id, *delete_files, area);
+        AppView::Spoofer => {
+            spoofer_panel::render(f, app, chunks[1]);
         }
-        crate::types::AppMode::Normal => {}
     }
 }

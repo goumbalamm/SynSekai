@@ -1,13 +1,31 @@
-use crate::types::{AppMode, InputState, TorrentRow};
+use crate::{
+    engine::TorrentMeta,
+    spoofer::SpooferHandle,
+    types::{AppMode, AppView, ClientProfile, InputState, SpooferField, SpooferSnapshot, TorrentRow},
+};
 
 #[derive(Default)]
 pub struct App {
     pub torrents: Vec<TorrentRow>,
     pub selected: usize,
+    pub view: AppView,
     pub mode: AppMode,
     pub add_input: InputState,
     pub status_message: Option<String>,
     pub should_quit: bool,
+
+    // Spoofer state
+    pub spoofer_handle: Option<SpooferHandle>,
+    pub spoofer_upload_input: InputState,
+    pub spoofer_download_input: InputState,
+    pub spoofer_tracker_input: InputState,
+    pub spoofer_tracker_urls: Vec<String>,
+    pub spoofer_tracker_idx: usize,
+    pub spoofer_client_idx: usize,
+    pub spoofer_focused_field: Option<SpooferField>,
+    pub spoofer_info_hash: String,
+    pub spoofer_total_bytes: u64,
+    pub spoofer_torrent_name: Option<String>,
 }
 
 impl App {
@@ -75,6 +93,74 @@ impl App {
 
     pub fn dismiss_dialog(&mut self) {
         self.mode = AppMode::Normal;
+    }
+
+    /// Switch to the Spoofer view, optionally pre-populating from a torrent.
+    pub fn enter_spoofer_view(&mut self, torrent_id: Option<usize>, meta: Option<TorrentMeta>) {
+        self.spoofer_upload_input.clear();
+        self.spoofer_download_input.clear();
+        self.spoofer_tracker_input.clear();
+        self.spoofer_tracker_urls.clear();
+        self.spoofer_tracker_idx = 0;
+        self.spoofer_focused_field = None;
+
+        self.spoofer_torrent_name = torrent_id
+            .and_then(|id| self.torrents.iter().find(|t| t.id == id))
+            .map(|t| t.name.clone());
+
+        if let Some(m) = meta {
+            self.spoofer_info_hash = m.info_hash_hex;
+            self.spoofer_total_bytes = m.total_bytes;
+            self.spoofer_tracker_urls = m.tracker_urls;
+        } else {
+            self.spoofer_info_hash.clear();
+            self.spoofer_total_bytes = 0;
+        }
+
+        // Pre-fill the tracker URL field from the first known URL (if any)
+        if let Some(url) = self.spoofer_tracker_urls.first() {
+            let url = url.clone();
+            self.spoofer_tracker_input.value = url.clone();
+            self.spoofer_tracker_input.cursor = url.len();
+        }
+
+        self.view = AppView::Spoofer;
+    }
+
+    /// Toggle between Downloader and Spoofer views.
+    pub fn toggle_view(&mut self) {
+        self.view = match self.view {
+            AppView::Downloader => AppView::Spoofer,
+            AppView::Spoofer => AppView::Downloader,
+        };
+    }
+
+    /// Cycle through `spoofer_tracker_urls` and update the tracker input field.
+    pub fn cycle_spoofer_tracker(&mut self) {
+        if self.spoofer_tracker_urls.is_empty() {
+            return;
+        }
+        self.spoofer_tracker_idx =
+            (self.spoofer_tracker_idx + 1) % self.spoofer_tracker_urls.len();
+        let url = self.spoofer_tracker_urls[self.spoofer_tracker_idx].clone();
+        self.spoofer_tracker_input.value = url.clone();
+        self.spoofer_tracker_input.cursor = url.len();
+    }
+
+    /// Cycle through available `ClientProfile` variants.
+    pub fn cycle_spoofer_client(&mut self) {
+        self.spoofer_client_idx =
+            (self.spoofer_client_idx + 1) % ClientProfile::all().len();
+    }
+
+    pub fn selected_spoofer_client(&self) -> ClientProfile {
+        ClientProfile::all()[self.spoofer_client_idx % ClientProfile::all().len()]
+    }
+
+    /// Return a clone of the current spoofer snapshot (if a session is running).
+    pub fn spoofer_snapshot(&self) -> Option<SpooferSnapshot> {
+        let handle = self.spoofer_handle.as_ref()?;
+        handle.snapshot.lock().ok().map(|s| s.clone())
     }
 }
 
